@@ -251,6 +251,10 @@ public class Print {
       prVarDecl((VarDecl) d, i);
     else if (d instanceof TypeDecl)
       prTypeDecl((TypeDecl) d, i);
+    else if (d instanceof StructUnionDecl)
+      prStructUnionDecl((StructUnionDecl) d, i);
+    else if (d instanceof EnumDecl)
+      prEnumDecl((EnumDecl) d, i);
     else
       throw new Error("Print.prDec");
   }
@@ -292,6 +296,17 @@ public class Print {
     sayln("");
     indent(i + 1);
     say("\"" + d.name.name + "\"");
+    if (d.modifiers != null && !d.modifiers.isEmpty()) {
+      sayln(",");
+      indent(i + 1);
+      say("Modifiers(");
+      for (int j = 0; j < d.modifiers.size(); j++) {
+        if (j > 0)
+          say(", ");
+        say(d.modifiers.get(j).toString());
+      }
+      say(")");
+    }
     sayln(",");
     indent(i + 1);
     say("Type(");
@@ -321,6 +336,110 @@ public class Print {
     say(")");
     sayln("");
     indent(i);
+    say(")");
+  }
+
+  void prStructUnionDecl(StructUnionDecl d, int i) {
+    say("StructUnionDecl(");
+    sayln("");
+    if (d.modifiers != null && !d.modifiers.isEmpty()) {
+      indent(i + 1);
+      say("Modifiers(");
+      for (int j = 0; j < d.modifiers.size(); j++) {
+        if (j > 0)
+          say(", ");
+        say(d.modifiers.get(j).toString());
+      }
+      say(")");
+      sayln(",");
+    }
+    indent(i + 1);
+    say("Kind(" + d.structOrUnion.kind + ")");
+    sayln(",");
+    indent(i + 1);
+    say("\"" + d.name.name + "\"");
+    sayln(",");
+    indent(i + 1);
+    say("Declarator(");
+    prStructDeclarationList(d.declarator.declarations, i + 2);
+    say(")");
+    sayln("");
+    indent(i);
+    say(")");
+  }
+
+  void prStructDeclarationList(StructDeclarationList sdl, int d) {
+    indent(d);
+    say("StructDeclarationList(");
+    if (sdl != null && sdl.declarations != null && !sdl.declarations.isEmpty()) {
+      sayln("");
+      for (int i = 0; i < sdl.declarations.size(); i++) {
+        indent(d + 1);
+        say("StructDeclaration(");
+        sayln("");
+        indent(d + 2);
+        say("Type(");
+        prType(sdl.declarations.get(i).type, d + 3);
+        say(")");
+        sayln(",");
+        indent(d + 2);
+        say("\"" + sdl.declarations.get(i).name.name + "\"");
+        sayln("");
+        indent(d + 1);
+        say(")");
+        if (i < sdl.declarations.size() - 1) {
+          sayln(",");
+        }
+      }
+    }
+    sayln("");
+    indent(d);
+    say(")");
+  }
+
+  void prEnumDecl(EnumDecl d, int i) {
+    say("EnumDecl(");
+    sayln("");
+    indent(i + 1);
+    say("\"" + d.name + "\"");
+    sayln(",");
+    indent(i + 1);
+    say("Enumerators(");
+    prEnumeratorList(d.enumerators, i + 2);
+    say(")");
+    sayln("");
+    indent(i);
+    say(")");
+  }
+
+  void prEnumeratorList(EnumeratorList el, int d) {
+    indent(d);
+    say("EnumeratorList(");
+    if (el != null && el.enumerators != null && !el.enumerators.isEmpty()) {
+      sayln("");
+      for (int i = 0; i < el.enumerators.size(); i++) {
+        indent(d + 1);
+        say("Enumerator(");
+        sayln("");
+        indent(d + 2);
+        say("\"" + el.enumerators.get(i).name + "\"");
+        if (el.enumerators.get(i).value != null) {
+          sayln(",");
+          indent(d + 2);
+          say("Value(");
+          prExp(el.enumerators.get(i).value, d + 3);
+          say(")");
+        }
+        sayln("");
+        indent(d + 1);
+        say(")");
+        if (i < el.enumerators.size() - 1) {
+          sayln(",");
+        }
+      }
+    }
+    sayln("");
+    indent(d);
     say(")");
   }
 
