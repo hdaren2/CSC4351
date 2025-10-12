@@ -1,0 +1,347 @@
+package Parse;
+
+import java_cup.runtime.*;
+import Absyn.*;
+import Symbol.Symbol;
+import java.util.List;
+import java.util.ArrayList;
+
+/* ========= Parser class name & sym ========= */
+parser code {:
+  private Lexer lexer;
+  
+  public Grm(Lexer l) {
+    super();
+    lexer = l;
+  }
+  
+  public void syntax_error(Symbol cur_token) {
+    System.err.println("Syntax error");
+  }
+  public void unrecovered_syntax_error(Symbol cur_token) throws java.lang.Exception {
+    System.err.println("Unrecovered syntax error");
+    throw new Exception("Parse aborted");
+  }
+  public java_cup.runtime.Symbol scan() throws java.lang.Exception {
+    return lexer.nextToken();
+  }
+:};
+
+/* ========= Terminals ========= */
+terminal VAR, FUN, IF, ELSE, FOR, WHILE, DO, RETURN, BREAK, CONTINUE;
+terminal INT, CHAR, SHORT, VOID;
+terminal EXTERN, VOLATILE, CONST, STATIC;
+terminal ID, DECIMAL_LITERAL, HEX_LITERAL, OCTAL_LITERAL, CHAR_LITERAL, STRING_LITERAL;
+terminal LPAREN, RPAREN, LBRACK, RBRACK, LBRACE, RBRACE;
+terminal SEMICOLON, COMMA, QUESTION, COLON, PERIOD;
+terminal ASSIGN, ADDASSIGN, SUBASSIGN, MULASSIGN, DIVASSIGN, MODASSIGN;
+terminal PLUS, MINUS, TIMES, DIVIDE, MODULUS;
+terminal LT, LE, GT, GE, EQ, NEQ;
+terminal AND, OR, NOT;
+terminal INCREMENT, DECREMENT;
+terminal BITWISEAND, BWISEOR, BWISEXOR, TILDE, LSHIFT, RSHIFT;
+terminal BWISEANDASSIGN, BWISEORASSIGN, BWISEXORASSIGN, LSHIFTASSIGN, RSHIFTASSIGN;
+terminal ARROW, ELIPSES;
+terminal AUTO, CASE, DEFAULT, ENUM, GOTO, LONG, FLOAT, DOUBLE;
+terminal REGISTER, SIGNED, SIZEOF, STRUCT, SWITCH, TYPEDEF, UNION, UNSIGNED;
+
+/* ========= Nonterminals ========= */
+non terminal Program program;
+non terminal DeclList decl_list;
+non terminal Dec decl;
+non terminal BitFieldList bitfield_list;
+non terminal BitFieldValue bitfield_value;
+non terminal Type type;
+non terminal Type type_name;
+non terminal TypeAugments type_augments;
+non terminal PointerList pointer_list;
+non terminal BracketsList brackets_list;
+non terminal EmptyArrayTypeList empty_array_type_list;
+non terminal EmptyArrayType empty_array_type;
+non terminal ExpressionArrayTypeList expression_array_type_list;
+non terminal ExpressionArrayType expression_array_type;
+non terminal ArraySuffixes array_suffixes;
+non terminal ArraySuffix array_suffix;
+non terminal ParamList param_list_opt;
+non terminal ParamList param_list;
+non terminal Param param;
+non terminal TypeParameters type_parameters;
+non terminal Parameters parameters;
+non terminal ParameterList parameter_list;
+non terminal ParameterTypeList parameter_type_list;
+non terminal StructOrUnion struct_or_union;
+non terminal StructOrUnionDeclarator struct_or_union_declarator;
+non terminal StructDeclarationList struct_declaration_list;
+non terminal EnumeratorList enumerator_list;
+non terminal Enumerator enumerator;
+non terminal InitializerList initializer_list;
+non terminal Initializer initializer;
+non terminal Stmt stmt;
+non terminal StmtList stmt_list;
+non terminal CompoundStmt compound_stmt;
+non terminal Exp exp;
+non terminal Exp comma_exp;
+non terminal ExpList exp_list;
+non terminal InitOpt init_opt;
+non terminal Name name;
+non terminal Object exp_or_decl_opt;
+non terminal Exp exp_opt;
+
+/* ========= Precedence (lowest to highest) ========= */
+precedence left OR;
+precedence left AND;
+precedence left BWISEOR;
+precedence left BWISEXOR;
+precedence left BITWISEAND;
+precedence left EQ, NEQ;
+precedence left LT, LE, GT, GE;
+precedence left LSHIFT, RSHIFT;
+precedence left PLUS, MINUS;
+precedence left TIMES, DIVIDE, MODULUS;
+precedence right NOT, TILDE, INCREMENT, DECREMENT, PLUS, MINUS;
+precedence left LBRACK, LPAREN;
+precedence right ASSIGN, ADDASSIGN, SUBASSIGN, MULASSIGN, DIVASSIGN, MODASSIGN;
+precedence right QUESTION, COLON;
+
+/* ========= Grammar Rules ========= */
+program ::= decl_list:e {: RESULT = new Program(e.declarations); :}
+          | /* empty */ {: RESULT = new Program(new ArrayList<Dec>()); :}
+          ;
+
+decl_list ::= decl_list:d decl:x {: d.declarations.add(x); RESULT = d; :}
+            | decl:x             {: ArrayList<Dec> r = new ArrayList<>(); r.add(x); RESULT = new DeclList(r); :}
+            ;
+
+decl ::= VAR bitfield_list:b type:t name:n init_opt:i SEMICOLON
+                  {: RESULT = new VarDecl(-1, b.modifiers, t, n, i.expression); :}
+               | FUN bitfield_list:b type:t name:n parameters:p compound_stmt:c
+                  {: RESULT = new FunDecl(-1, b.modifiers, t, n, p.parameters, c); :}
+               | FUN bitfield_list:b type:t name:n type_parameters:tp SEMICOLON
+                  {: RESULT = new FunDecl(-1, b.modifiers, t, n, tp.parameters, null); :}
+               | TYPEDEF type:t name:n SEMICOLON
+                  {: RESULT = new TypeDecl(-1, t, n); :}
+               | bitfield_list:b struct_or_union:su name:n struct_or_union_declarator:sud
+                  {: RESULT = new StructUnionDecl(-1, b.modifiers, su, n, sud); :}
+               | ENUM ID:i LBRACE enumerator_list:el RBRACE
+                  {: RESULT = new EnumDecl(-1, (String)((java_cup.runtime.Symbol)CUP$Grm$stack.elementAt(CUP$Grm$top-3)).value, el); :}
+       ;
+
+bitfield_list ::= bitfield_value:b bitfield_list:l {: l.modifiers.add(b.modifier); RESULT = l; :}
+                | /* empty */              {: RESULT = new BitFieldList(new ArrayList<BitMod>()); :}
+                ;
+
+bitfield_value ::= CONST    {: RESULT = new BitFieldValue(BitMod.CONST); :}
+                 | VOLATILE {: RESULT = new BitFieldValue(BitMod.VOLATILE); :}
+                 | EXTERN   {: RESULT = new BitFieldValue(BitMod.EXTERN); :}
+                 | STATIC   {: RESULT = new BitFieldValue(BitMod.STATIC); :}
+                 | AUTO     {: RESULT = new BitFieldValue(BitMod.AUTO); :}
+                 | REGISTER {: RESULT = new BitFieldValue(BitMod.REGISTER); :}
+                 ;
+
+type ::= type_name:tn type_augments:ta {: RESULT = Type.combine(tn, ta); :}
+       | type_name:tn                  {: RESULT = tn; :}
+       ;
+
+type_name ::= VOID   {: RESULT = new BaseType(BaseType.Kind.VOID); :}
+            | CHAR   {: RESULT = new BaseType(BaseType.Kind.CHAR); :}
+            | SHORT  {: RESULT = new BaseType(BaseType.Kind.SHORT); :}
+            | INT    {: RESULT = new BaseType(BaseType.Kind.INT); :}
+            | LONG   {: RESULT = new BaseType(BaseType.Kind.LONG); :}
+            | FLOAT  {: RESULT = new BaseType(BaseType.Kind.FLOAT); :}
+            | DOUBLE {: RESULT = new BaseType(BaseType.Kind.DOUBLE); :}
+            | ENUM ID {: RESULT = new EnumType((String)((java_cup.runtime.Symbol)CUP$Grm$stack.elementAt(CUP$Grm$top-0)).value); :}
+            | ID {: RESULT = new NamedType((String)((java_cup.runtime.Symbol)CUP$Grm$stack.elementAt(CUP$Grm$top-0)).value); :}
+            ;
+
+type_augments ::= pointer_list:pl {: RESULT = new TypeAugments(pl, null); :}
+                | brackets_list:bl {: RESULT = new TypeAugments(null, bl); :}
+                | pointer_list:pl brackets_list:bl {: RESULT = new TypeAugments(pl, bl); :}
+                ;
+
+pointer_list ::= TIMES {: RESULT = new PointerList(1); :}
+               | pointer_list:p TIMES {: p.inc(); RESULT = p; :}
+               ;
+
+brackets_list ::= empty_array_type_list:eatl {: RESULT = new BracketsList(eatl); :}
+                | expression_array_type_list:eatl {: RESULT = new BracketsList(eatl); :}
+                ;
+
+empty_array_type_list ::= empty_array_type:eat {: RESULT = new EmptyArrayTypeList(eat); :}
+                        | empty_array_type_list:eatl empty_array_type:eat {: eatl.add(eat); RESULT = eatl; :}
+                        ;
+
+empty_array_type ::= LBRACK RBRACK {: RESULT = new EmptyArrayType(); :}
+                   ;
+
+expression_array_type_list ::= expression_array_type:eat {: RESULT = new ExpressionArrayTypeList(eat); :}
+                             | expression_array_type_list:eatl expression_array_type:eat {: eatl.add(eat); RESULT = eatl; :}
+                             ;
+
+expression_array_type ::= LBRACK exp:e RBRACK {: RESULT = new ExpressionArrayType(e); :}
+                        ;
+
+name ::= ID {: RESULT = new Name((String)((java_cup.runtime.Symbol)CUP$Grm$stack.elementAt(CUP$Grm$top-0)).value, -1); :}
+       ;
+
+init_opt ::= ASSIGN initializer:i {: RESULT = new InitOpt(i); :}
+           | /* empty */   {: RESULT = new InitOpt(null); :}
+           ;
+
+param_list_opt ::= param_list:p {: RESULT = p; :}
+                 | /* empty */  {: RESULT = new ParamList(new ArrayList<Param>()); :}
+                 ;
+
+param_list ::= param_list:p COMMA param:q {: p.parameters.add(q); RESULT = p; :}
+             | param:p                     {: ArrayList<Param> r=new ArrayList<>(); r.add(p); RESULT=new ParamList(r); :}
+             ;
+
+param ::= type:t name:n {: RESULT = new Param(-1, t, n); :}
+        ;
+
+type_parameters ::= LPAREN parameter_type_list:ptl RPAREN {: RESULT = new TypeParameters(ptl); :}
+                  | LPAREN parameter_type_list:ptl COMMA ELIPSES RPAREN {: RESULT = new TypeParameters(ptl, true); :}
+                  | LPAREN RPAREN {: RESULT = new TypeParameters(new ArrayList<Type>()); :}
+                  ;
+
+parameters ::= LPAREN parameter_list:pl RPAREN {: RESULT = new Parameters(pl); :}
+             | LPAREN parameter_list:pl COMMA ELIPSES RPAREN {: RESULT = new Parameters(pl, true); :}
+             | LPAREN RPAREN {: RESULT = new Parameters(new ArrayList<Param>()); :}
+             ;
+
+parameter_list ::= type:t name:n {: ArrayList<Param> r = new ArrayList<>(); r.add(new Param(-1, t, n)); RESULT = new ParameterList(r); :}
+                 | parameter_list:pl COMMA type:t name:n {: pl.parameters.add(new Param(-1, t, n)); RESULT = pl; :}
+                 ;
+
+parameter_type_list ::= type:t {: ArrayList<Type> r = new ArrayList<>(); r.add(t); RESULT = new ParameterTypeList(r); :}
+                      | parameter_type_list:ptl COMMA type:t {: ptl.types.add(t); RESULT = ptl; :}
+                      ;
+
+struct_or_union ::= STRUCT {: RESULT = new StructOrUnion(StructOrUnion.Kind.STRUCT); :}
+                  | UNION {: RESULT = new StructOrUnion(StructOrUnion.Kind.UNION); :}
+                  ;
+
+struct_or_union_declarator ::= LBRACE struct_declaration_list:sdl RBRACE {: RESULT = new StructOrUnionDeclarator(sdl); :}
+                             ;
+
+struct_declaration_list ::= type:t name:n SEMICOLON {: ArrayList<StructDeclaration> r = new ArrayList<>(); r.add(new StructDeclaration(t, n)); RESULT = new StructDeclarationList(r); :}
+                          | struct_declaration_list:sdl type:t name:n SEMICOLON {: sdl.declarations.add(new StructDeclaration(t, n)); RESULT = sdl; :}
+                          ;
+
+enumerator_list ::= enumerator:e {: ArrayList<Enumerator> r = new ArrayList<>(); r.add(e); RESULT = new EnumeratorList(r); :}
+                  | enumerator_list:el COMMA enumerator:e {: el.enumerators.add(e); RESULT = el; :}
+                  ;
+
+enumerator ::= ID {: RESULT = new Enumerator((String)((java_cup.runtime.Symbol)CUP$Grm$stack.elementAt(CUP$Grm$top-0)).value, null); :}
+             | ID ASSIGN exp:e {: RESULT = new Enumerator((String)((java_cup.runtime.Symbol)CUP$Grm$stack.elementAt(CUP$Grm$top-2)).value, e); :}
+             ;
+
+initializer_list ::= initializer:i {: ArrayList<Initializer> r = new ArrayList<>(); r.add(i); RESULT = new InitializerList(r); :}
+                   | initializer_list:il COMMA initializer:i {: il.initializers.add(i); RESULT = il; :}
+                   ;
+
+initializer ::= exp:e {: RESULT = new Initializer(e); :}
+              | LBRACE initializer_list:il RBRACE {: RESULT = new Initializer(il); :}
+              ;
+
+stmt ::= compound_stmt:s                    {: RESULT = s; :}
+       | IF LPAREN exp:e RPAREN stmt:s ELSE stmt:t {: RESULT = new IfStmt(-1, e, s, t); :}
+       | IF LPAREN exp:e RPAREN stmt:s         {: RESULT = new IfStmt(-1, e, s, null); :}
+       | WHILE LPAREN exp:e RPAREN stmt:s      {: RESULT = new WhileStmt(-1, e, s); :}
+       | DO stmt:s WHILE LPAREN exp:e RPAREN SEMICOLON {: RESULT = new DoWhileStmt(-1, s, e); :}
+       | FOR LPAREN exp_or_decl_opt:i SEMICOLON exp_opt:c SEMICOLON exp_opt:k RPAREN stmt:b
+          {: RESULT = ForStmt.from(-1, i, c, k, b); :}
+       | RETURN exp_opt:e SEMICOLON             {: RESULT = new ReturnStmt(-1, e); :}
+       | BREAK SEMICOLON                        {: RESULT = new BreakStmt(-1); :}
+       | CONTINUE SEMICOLON                     {: RESULT = new ContinueStmt(-1); :}
+       | VAR bitfield_list:b type:t name:n init_opt:i SEMICOLON {: RESULT = new VarDeclStmt(-1, new VarDecl(-1, b.modifiers, t, n, i.expression)); :}
+       | comma_exp:e SEMICOLON                  {: RESULT = new ExprStmt(-1, e); :}
+       | error SEMICOLON                        {: RESULT = new ErrorStmt(); :}
+       ;
+
+exp_or_decl_opt ::= comma_exp:e       {: RESULT = e; :}
+      | /* empty */       {: RESULT = null; :}
+      ;
+
+exp_opt ::= exp:e {: RESULT = e; :}
+          | /* empty */ {: RESULT = null; :}
+          ;
+
+compound_stmt ::= LBRACE stmt_list:s RBRACE {: RESULT = new Block(-1, s.statements); :}
+                | LBRACE RBRACE             {: RESULT = new Block(-1, new ArrayList<Stmt>()); :}
+                ;
+
+stmt_list ::= stmt_list:s stmt:x {: s.statements.add(x); RESULT = s; :}
+            | stmt:x             {: ArrayList<Stmt> r=new ArrayList<>(); r.add(x); RESULT=new StmtList(r); :}
+            ;
+
+/* Comma expression (lowest precedence) */
+comma_exp ::= comma_exp:l COMMA exp:r {: RESULT = new Comma(-1, l, r); :}
+            | exp:e                   {: RESULT = e; :}
+            ;
+
+exp ::=
+      /* assignment (right-assoc) */
+      exp:l ASSIGN exp:r          {: RESULT = new Assign(-1, Assign.Op.ASSIGN, l, r); :}
+    | exp:l ADDASSIGN exp:r     {: RESULT = new Assign(-1, Assign.Op.PLUS_ASSIGN, l, r); :}
+    | exp:l SUBASSIGN exp:r    {: RESULT = new Assign(-1, Assign.Op.MINUS_ASSIGN, l, r); :}
+    | exp:l MULASSIGN exp:r     {: RESULT = new Assign(-1, Assign.Op.STAR_ASSIGN, l, r); :}
+    | exp:l DIVASSIGN exp:r    {: RESULT = new Assign(-1, Assign.Op.SLASH_ASSIGN, l, r); :}
+    | exp:l MODASSIGN exp:r  {: RESULT = new Assign(-1, Assign.Op.PERCENT_ASSIGN, l, r); :}
+
+    /* conditional */
+    | exp:c QUESTION exp:t COLON exp:e {: RESULT = new CondExp(-1, c, t, e); :}
+
+    /* logical or/and */
+    | exp:l OR  exp:r {: RESULT = new Binary(-1, Binary.Op.LOR,  l, r); :}
+    | exp:l AND exp:r {: RESULT = new Binary(-1, Binary.Op.LAND, l, r); :}
+
+    /* equality/relational/bitwise/shift/add/mul (usual precedence via declarations) */
+    | exp:l BWISEOR    exp:r {: RESULT = new Binary(-1, Binary.Op.BOR,  l, r); :}
+    | exp:l BWISEXOR  exp:r {: RESULT = new Binary(-1, Binary.Op.BXOR, l, r); :}
+    | exp:l BITWISEAND    exp:r {: RESULT = new Binary(-1, Binary.Op.BAND, l, r); :}
+    | exp:l EQ     exp:r {: RESULT = new Binary(-1, Binary.Op.EQ,   l, r); :}
+    | exp:l NEQ    exp:r {: RESULT = new Binary(-1, Binary.Op.NEQ,  l, r); :}
+    | exp:l LT     exp:r {: RESULT = new Binary(-1, Binary.Op.LT,   l, r); :}
+    | exp:l LE     exp:r {: RESULT = new Binary(-1, Binary.Op.LE,   l, r); :}
+    | exp:l GT     exp:r {: RESULT = new Binary(-1, Binary.Op.GT,   l, r); :}
+    | exp:l GE     exp:r {: RESULT = new Binary(-1, Binary.Op.GE,   l, r); :}
+    | exp:l LSHIFT    exp:r {: RESULT = new Binary(-1, Binary.Op.SHL,  l, r); :}
+    | exp:l RSHIFT    exp:r {: RESULT = new Binary(-1, Binary.Op.SHR,  l, r); :}
+    | exp:l PLUS   exp:r {: RESULT = new Binary(-1, Binary.Op.ADD,  l, r); :}
+    | exp:l MINUS  exp:r {: RESULT = new Binary(-1, Binary.Op.SUB,  l, r); :}
+    | exp:l TIMES   exp:r {: RESULT = new Binary(-1, Binary.Op.MUL,  l, r); :}
+    | exp:l DIVIDE  exp:r {: RESULT = new Binary(-1, Binary.Op.DIV,  l, r); :}
+    | exp:l MODULUS exp:r{: RESULT = new Binary(-1, Binary.Op.MOD,  l, r); :}
+
+    /* unary */
+    | NOT exp:e        {: RESULT = new Unary(-1, Unary.Op.LNOT, e); :}
+    | TILDE exp:e      {: RESULT = new Unary(-1, Unary.Op.BNOT, e); :}
+    | INCREMENT exp:e   {: RESULT = new Unary(-1, Unary.Op.PREINC, e); :}
+    | DECREMENT exp:e {: RESULT = new Unary(-1, Unary.Op.PREDEC, e); :}
+    | MINUS exp:e      {: RESULT = new Unary(-1, Unary.Op.NEG, e); :}
+    | PLUS  exp:e      {: RESULT = new Unary(-1, Unary.Op.POS, e); :}
+    | BITWISEAND exp:e {: RESULT = new Unary(-1, Unary.Op.ADDRESS, e); :}
+    | TIMES exp:e      {: RESULT = new Unary(-1, Unary.Op.DEREF, e); :}
+
+
+    /* postfix */
+    | exp:e INCREMENT   {: RESULT = new Postfix(-1, Postfix.Op.POSTINC, e); :}
+    | exp:e DECREMENT {: RESULT = new Postfix(-1, Postfix.Op.POSTDEC, e); :}
+    | exp:arr LBRACK exp:i RBRACK {: RESULT = new Index(-1, arr, i); :}
+    | exp:fn  LPAREN exp_list:es RPAREN   {: RESULT = new Call(-1, fn, es.expressions); :}
+    | exp:fn  LPAREN RPAREN               {: RESULT = new Call(-1, fn, new ArrayList<Exp>()); :}
+    | exp:e PERIOD ID {: RESULT = new MemberAccess(-1, e, (String)((java_cup.runtime.Symbol)CUP$Grm$stack.elementAt(CUP$Grm$top-0)).value); :}
+    | exp:e ARROW ID {: RESULT = new MemberAccess(-1, e, (String)((java_cup.runtime.Symbol)CUP$Grm$stack.elementAt(CUP$Grm$top-0)).value, true); :}
+
+    /* primaries */
+    | LPAREN exp:e RPAREN {: RESULT = new ParenExp(-1, e); :}
+    | ID           {: RESULT = new Var(-1, new Name((String)((java_cup.runtime.Symbol)CUP$Grm$stack.elementAt(CUP$Grm$top-0)).value, -1)); :}
+    | DECIMAL_LITERAL          {: RESULT = new IntExp(-1, ((Integer)((java_cup.runtime.Symbol)CUP$Grm$stack.elementAt(CUP$Grm$top-0)).value).intValue()); :}
+    | HEX_LITERAL              {: RESULT = new IntExp(-1, ((Integer)((java_cup.runtime.Symbol)CUP$Grm$stack.elementAt(CUP$Grm$top-0)).value).intValue()); :}
+    | OCTAL_LITERAL            {: RESULT = new IntExp(-1, ((Integer)((java_cup.runtime.Symbol)CUP$Grm$stack.elementAt(CUP$Grm$top-0)).value).intValue()); :}
+    | CHAR_LITERAL         {: RESULT = new CharLit(-1, (Character)((java_cup.runtime.Symbol)CUP$Grm$stack.elementAt(CUP$Grm$top-0)).value); :}
+    ;
+    
+exp_list ::= exp_list:l COMMA exp:e {: l.expressions.add(e); RESULT = l; :}
+           | exp:e                  {: ArrayList<Exp> r=new ArrayList<>(); r.add(e); RESULT=new ExpList(r); :}
+           ;
